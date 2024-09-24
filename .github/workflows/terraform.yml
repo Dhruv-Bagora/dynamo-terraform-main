@@ -12,7 +12,7 @@ on:
           - plan
           - apply
       target_resource:
-        description: 'Target resource (prefix DynamoDB tables with dynamodb:, e.g., dynamodb:table1 or aws_instance.my_instance for EC2)'
+        description: 'Target DynamoDB table (e.g., table1) or AWS resource (e.g., aws_instance.my_instance)'
         required: false
         default: ''
 
@@ -39,37 +39,40 @@ jobs:
       - name: Terraform Init
         run: terraform init
 
-      # Determine the target format based on the resource type (DynamoDB table or other resources)
+      # Terraform Plan: Default to treating the input as DynamoDB table if provided
       - name: Terraform Plan
         if: ${{ github.event.inputs.action == 'plan' }}
         run: |
-          if [[ "${{ github.event.inputs.target_resource }}" == dynamodb:* ]]; then
-            # Handle DynamoDB table
-            table_name="${{ github.event.inputs.target_resource#dynamodb: }}"
+          if [ "${{ github.event.inputs.target_resource }}" != "" ]; then
+            # Treat input as a DynamoDB table by default
+            table_name="${{ github.event.inputs.target_resource }}"
             echo "Running plan for DynamoDB table: $table_name"
             terraform plan --target="aws_dynamodb_table.dynamodb_tables[\"$table_name\"]"
           elif [ "${{ github.event.inputs.target_resource }}" != "" ]; then
-            # Handle other resources
+            # Handle any specific non-DynamoDB resources if provided
             echo "Running plan for resource: ${{ github.event.inputs.target_resource }}"
             terraform plan --target=${{ github.event.inputs.target_resource }}
           else
+            # Run plan for all resources
             echo "Running plan for all resources"
             terraform plan
           fi
 
+      # Terraform Apply: Default to treating the input as DynamoDB table if provided
       - name: Terraform Apply
         if: ${{ github.event.inputs.action == 'apply' }}
         run: |
-          if [[ "${{ github.event.inputs.target_resource }}" == dynamodb:* ]]; then
-            # Handle DynamoDB table
-            table_name="${{ github.event.inputs.target_resource#dynamodb: }}"
+          if [ "${{ github.event.inputs.target_resource }}" != "" ]; then
+            # Treat input as a DynamoDB table by default
+            table_name="${{ github.event.inputs.target_resource }}"
             echo "Running apply for DynamoDB table: $table_name"
             terraform apply --target="aws_dynamodb_table.dynamodb_tables[\"$table_name\"]" -auto-approve
           elif [ "${{ github.event.inputs.target_resource }}" != "" ]; then
-            # Handle other resources
+            # Handle any specific non-DynamoDB resources if provided
             echo "Running apply for resource: ${{ github.event.inputs.target_resource }}"
             terraform apply --target=${{ github.event.inputs.target_resource }} -auto-approve
           else
+            # Run apply for all resources
             echo "Running apply for all resources"
             terraform apply -auto-approve
           fi
