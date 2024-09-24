@@ -23,7 +23,7 @@ resource "aws_instance" "example1" {
   subnet_id     = data.aws_subnets.default.ids[0] # Use the first subnet from the default VPC
 
   tags = {
-    Name = "MyEC2Instance"
+    Name = "MyEC2Instance1"
   }
 }
 
@@ -33,6 +33,6 @@ resource "aws_instance" "example2" {
   subnet_id     = data.aws_subnets.default.ids[0] # Use the first subnet from the default VPC
 
   tags = {
-    Name = "MyEC2Instance"
+    Name = "MyEC2Instance2"
   }
 }
