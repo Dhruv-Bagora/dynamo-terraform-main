@@ -11,8 +11,16 @@ on:
         options:
           - plan
           - apply
+      resource_scope:
+        description: 'Choose whether to run the action on all resources or a custom resource'
+        required: true
+        default: 'all'
+        type: choice
+        options:
+          - all
+          - custom
       target_resource:
-        description: 'DynamoDB table name (e.g., table1) or AWS resource (e.g., aws_instance.my_instance)'
+        description: 'DynamoDB table name (e.g., table1) or AWS resource (e.g., aws_instance.my_instance).'
         required: false
         default: ''
 
@@ -29,7 +37,7 @@ jobs:
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: us-east-1  # You can hardcode the region or use a GitHub secret for flexibility
+          aws-region: us-east-1 
 
       - name: Set up Terraform
         uses: hashicorp/setup-terraform@v2
@@ -39,40 +47,44 @@ jobs:
       - name: Terraform Init
         run: terraform init
 
-      # Terraform Plan: Use input format to distinguish between DynamoDB tables and other resources
+      # Plan Step: Conditional logic based on resource scope (all or custom)
       - name: Terraform Plan
         if: ${{ github.event.inputs.action == 'plan' }}
         run: |
-          if [[ "${{ github.event.inputs.target_resource }}" == *.* ]]; then
-            # If input contains a period (.), treat it as a non-DynamoDB resource
-            echo "Running plan for AWS resource: ${{ github.event.inputs.target_resource }}"
-            terraform plan --target=${{ github.event.inputs.target_resource }}
-          elif [ "${{ github.event.inputs.target_resource }}" != "" ]; then
-            # Otherwise, treat input as a DynamoDB table
-            table_name="${{ github.event.inputs.target_resource }}"
-            echo "Running plan for DynamoDB table: $table_name"
-            terraform plan --target="aws_dynamodb_table.dynamodb_tables[\"$table_name\"]"
-          else
-            # Run plan for all resources if no input is provided
+          if [ "${{ github.event.inputs.resource_scope }}" == "all" ]; then
             echo "Running plan for all resources"
             terraform plan
+          elif [ "${{ github.event.inputs.resource_scope }}" == "custom" ] && [ "${{ github.event.inputs.target_resource }}" != "" ]; then
+            if [[ "${{ github.event.inputs.target_resource }}" == *.* ]]; then
+              echo "Running plan for AWS resource: ${{ github.event.inputs.target_resource }}"
+              terraform plan --target=${{ github.event.inputs.target_resource }}
+            else
+              table_name="${{ github.event.inputs.target_resource }}"
+              echo "Running plan for DynamoDB table: $table_name"
+              terraform plan --target="aws_dynamodb_table.dynamodb_tables[\"$table_name\"]"
+            fi
+          else
+            echo "No valid target resource provided."
+            exit 1
           fi
 
-      # Terraform Apply: Use input format to distinguish between DynamoDB tables and other resources
+      # Apply Step: Conditional logic based on resource scope (all or custom)
       - name: Terraform Apply
         if: ${{ github.event.inputs.action == 'apply' }}
         run: |
-          if [[ "${{ github.event.inputs.target_resource }}" == *.* ]]; then
-            # If input contains a period (.), treat it as a non-DynamoDB resource
-            echo "Running apply for AWS resource: ${{ github.event.inputs.target_resource }}"
-            terraform apply --target=${{ github.event.inputs.target_resource }} -auto-approve
-          elif [ "${{ github.event.inputs.target_resource }}" != "" ]; then
-            # Otherwise, treat input as a DynamoDB table
-            table_name="${{ github.event.inputs.target_resource }}"
-            echo "Running apply for DynamoDB table: $table_name"
-            terraform apply --target="aws_dynamodb_table.dynamodb_tables[\"$table_name\"]" -auto-approve
-          else
-            # Run apply for all resources if no input is provided
+          if [ "${{ github.event.inputs.resource_scope }}" == "all" ]; then
             echo "Running apply for all resources"
             terraform apply -auto-approve
+          elif [ "${{ github.event.inputs.resource_scope }}" == "custom" ] && [ "${{ github.event.inputs.target_resource }}" != "" ]; then
+            if [[ "${{ github.event.inputs.target_resource }}" == *.* ]]; then
+              echo "Running apply for AWS resource: ${{ github.event.inputs.target_resource }}"
+              terraform apply --target=${{ github.event.inputs.target_resource }} -auto-approve
+            else
+              table_name="${{ github.event.inputs.target_resource }}"
+              echo "Running apply for DynamoDB table: $table_name"
+              terraform apply --target="aws_dynamodb_table.dynamodb_tables[\"$table_name\"]" -auto-approve
+            fi
+          else
+            echo "No valid target resource provided."
+            exit 1
           fi
