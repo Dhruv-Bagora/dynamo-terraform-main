@@ -12,7 +12,7 @@ on:
           - plan
           - apply
       target_table:
-        description: 'Table name to target (e.g., table1) - leave empty for all tables'
+        description: 'Table name to target (e.g., table1) - required for specific table creation'
         required: false
         default: ''
 
@@ -39,22 +39,22 @@ jobs:
       - name: Terraform Init
         run: terraform init
 
-      # Terraform Plan with target
+      # Terraform Plan with exact format
       - name: Terraform Plan
         if: ${{ github.event.inputs.action == 'plan' }}
         run: |
           if [ "${{ github.event.inputs.target_table }}" != "" ]; then
-           terraform plan --target=aws_dynamodb_table.dynamodb_tables["${{ github.event.inputs.target_table }}"]
+            terraform plan --target='aws_dynamodb_table.dynamodb_tables["${{ github.event.inputs.target_table }}"]'
           else
             terraform plan
           fi
 
-      # Terraform Apply with target
+      # Terraform Apply with exact format
       - name: Terraform Apply
         if: ${{ github.event.inputs.action == 'apply' }}
         run: |
           if [ "${{ github.event.inputs.target_table }}" != "" ]; then
-            terraform apply --target=aws_dynamodb_table.dynamodb_tables["${{ github.event.inputs.target_table }}"]
+            terraform apply --target='aws_dynamodb_table.dynamodb_tables["${{ github.event.inputs.target_table }}"]' -auto-approve
           else
             terraform apply -auto-approve
           fi
