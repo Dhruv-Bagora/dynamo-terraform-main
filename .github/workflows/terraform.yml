@@ -14,7 +14,7 @@ on:
           - plan
           - apply
       target_table:
-        description: 'Table name to target (e.g., table1) - leave empty for all tables'
+        description: 'Table name to target (e.g., table1) - required for plan and apply'
         required: false
         default: ''
 
@@ -31,7 +31,7 @@ jobs:
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: us-east-1 
+          aws-region: us-east-1  # You can hardcode the region or use a secret
 
       - name: Set up Terraform
         uses: hashicorp/setup-terraform@v2
@@ -48,22 +48,24 @@ jobs:
         if: ${{ github.event.inputs.action == 'validate' }}
         run: terraform validate
 
-      # Terraform Plan with optional target
+      # Terraform Plan with exact format and required target_table
       - name: Terraform Plan
         if: ${{ github.event.inputs.action == 'plan' }}
         run: |
           if [ "${{ github.event.inputs.target_table }}" != "" ]; then
-            terraform plan --target='aws_dynamodb_table.dynamodb_tables["${{ "github.event.inputs.target_table" }}"]'
+            terraform plan --target='aws_dynamodb_table.dynamodb_tables["${{ github.event.inputs.target_table }}"]'
           else
-            terraform plan
+            echo "Error: target_table input is required for terraform plan."
+            exit 1
           fi
 
-      # Terraform Apply with optional target
+      # Terraform Apply with exact format and required target_table
       - name: Terraform Apply
         if: ${{ github.event.inputs.action == 'apply' }}
         run: |
           if [ "${{ github.event.inputs.target_table }}" != "" ]; then
-            terraform apply --target='aws_dynamodb_table.dynamodb_tables["${{ "github.event.inputs.target_table" }}"]' -auto-approve
+            terraform apply --target='aws_dynamodb_table.dynamodb_tables["${{ github.event.inputs.target_table }}"]' -auto-approve
           else
-            terraform apply -auto-approve
+            echo "Error: target_table input is required for terraform apply."
+            exit 1
           fi
