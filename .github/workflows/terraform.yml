@@ -12,7 +12,7 @@ on:
           - plan
           - apply
       resource_scope:
-        description: 'Choose whether to run the action on all resources or a custom resource'
+        description: 'Choose whether to run the action on all resources or custom resources'
         required: true
         default: 'all'
         type: choice
@@ -20,7 +20,7 @@ on:
           - all
           - custom
       target_resource:
-        description: 'DynamoDB table name (e.g., table1) or AWS resource (e.g., aws_instance.my_instance).'
+        description: 'Comma-separated DynamoDB table names (e.g., table1,table2) or AWS resources (e.g., aws_instance.my_instance,aws_s3_bucket.my_bucket). Only applicable if custom is selected.'
         required: false
         default: ''
 
@@ -55,14 +55,19 @@ jobs:
             echo "Running plan for all resources"
             terraform plan
           elif [ "${{ github.event.inputs.resource_scope }}" == "custom" ] && [ "${{ github.event.inputs.target_resource }}" != "" ]; then
-            if [[ "${{ github.event.inputs.target_resource }}" == *.* ]]; then
-              echo "Running plan for AWS resource: ${{ github.event.inputs.target_resource }}"
-              terraform plan --target=${{ github.event.inputs.target_resource }}
-            else
-              table_name="${{ github.event.inputs.target_resource }}"
-              echo "Running plan for DynamoDB table: $table_name"
-              terraform plan --target="aws_dynamodb_table.dynamodb_tables[\"$table_name\"]"
-            fi
+            # Split the target_resource string into an array by commas
+            IFS=',' read -r -a resources <<< "${{ github.event.inputs.target_resource }}"
+            
+            # Loop over each resource and run the appropriate command
+            for resource in "${resources[@]}"; do
+              if [[ "$resource" == *.* ]]; then
+                echo "Running plan for AWS resource: $resource"
+                terraform plan --target=$resource
+              else
+                echo "Running plan for DynamoDB table: $resource"
+                terraform plan --target="aws_dynamodb_table.dynamodb_tables[\"$resource\"]"
+              fi
+            done
           else
             echo "No valid target resource provided."
             exit 1
@@ -76,14 +81,19 @@ jobs:
             echo "Running apply for all resources"
             terraform apply -auto-approve
           elif [ "${{ github.event.inputs.resource_scope }}" == "custom" ] && [ "${{ github.event.inputs.target_resource }}" != "" ]; then
-            if [[ "${{ github.event.inputs.target_resource }}" == *.* ]]; then
-              echo "Running apply for AWS resource: ${{ github.event.inputs.target_resource }}"
-              terraform apply --target=${{ github.event.inputs.target_resource }} -auto-approve
-            else
-              table_name="${{ github.event.inputs.target_resource }}"
-              echo "Running apply for DynamoDB table: $table_name"
-              terraform apply --target="aws_dynamodb_table.dynamodb_tables[\"$table_name\"]" -auto-approve
-            fi
+            # Split the target_resource string into an array by commas
+            IFS=',' read -r -a resources <<< "${{ github.event.inputs.target_resource }}"
+            
+            # Loop over each resource and run the appropriate command
+            for resource in "${resources[@]}"; do
+              if [[ "$resource" == *.* ]]; then
+                echo "Running apply for AWS resource: $resource"
+                terraform apply --target=$resource -auto-approve
+              else
+                echo "Running apply for DynamoDB table: $resource"
+                terraform apply --target="aws_dynamodb_table.dynamodb_tables[\"$resource\"]" -auto-approve
+              fi
+            done
           else
             echo "No valid target resource provided."
             exit 1
