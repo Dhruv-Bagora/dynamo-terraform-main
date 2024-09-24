@@ -1,5 +1,5 @@
 variable "region" {
-    type = string
-    default = "us-west-1 "
-  
+  type    = string
+  default = "us-west-1"
+
 }
