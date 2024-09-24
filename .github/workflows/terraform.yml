@@ -44,27 +44,32 @@ jobs:
         if: ${{ github.event.inputs.action == 'plan' }}
         run: |
           if [[ "${{ github.event.inputs.target_resource }}" == dynamodb:* ]]; then
-            # If the input starts with 'dynamodb:', treat it as a DynamoDB table
+            # Handle DynamoDB table
             table_name="${{ github.event.inputs.target_resource#dynamodb: }}"
+            echo "Running plan for DynamoDB table: $table_name"
             terraform plan --target="aws_dynamodb_table.dynamodb_tables[\"$table_name\"]"
           elif [ "${{ github.event.inputs.target_resource }}" != "" ]; then
-            # For other AWS resources, use the regular target
+            # Handle other resources
+            echo "Running plan for resource: ${{ github.event.inputs.target_resource }}"
             terraform plan --target=${{ github.event.inputs.target_resource }}
           else
+            echo "Running plan for all resources"
             terraform plan
           fi
 
-      # Terraform Apply with correct syntax for DynamoDB tables and other resources
       - name: Terraform Apply
         if: ${{ github.event.inputs.action == 'apply' }}
         run: |
           if [[ "${{ github.event.inputs.target_resource }}" == dynamodb:* ]]; then
-            # If the input starts with 'dynamodb:', treat it as a DynamoDB table
+            # Handle DynamoDB table
             table_name="${{ github.event.inputs.target_resource#dynamodb: }}"
+            echo "Running apply for DynamoDB table: $table_name"
             terraform apply --target="aws_dynamodb_table.dynamodb_tables[\"$table_name\"]" -auto-approve
           elif [ "${{ github.event.inputs.target_resource }}" != "" ]; then
-            # For other AWS resources, use the regular target
+            # Handle other resources
+            echo "Running apply for resource: ${{ github.event.inputs.target_resource }}"
             terraform apply --target=${{ github.event.inputs.target_resource }} -auto-approve
           else
+            echo "Running apply for all resources"
             terraform apply -auto-approve
           fi
