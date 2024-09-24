@@ -29,7 +29,7 @@ jobs:
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: us-west-1 
+          aws-region: us-east-1  # You can hardcode the region or use a GitHub secret for flexibility
 
       - name: Set up Terraform
         uses: hashicorp/setup-terraform@v2
@@ -44,9 +44,11 @@ jobs:
         if: ${{ github.event.inputs.action == 'plan' }}
         run: |
           if [[ "${{ github.event.inputs.target_resource }}" == dynamodb:* ]]; then
-            table_name=${{ github.event.inputs.target_resource#dynamodb: }}
+            # If the input starts with 'dynamodb:', treat it as a DynamoDB table
+            table_name="${{ github.event.inputs.target_resource#dynamodb: }}"
             terraform plan --target="aws_dynamodb_table.dynamodb_tables[\"$table_name\"]"
           elif [ "${{ github.event.inputs.target_resource }}" != "" ]; then
+            # For other AWS resources, use the regular target
             terraform plan --target=${{ github.event.inputs.target_resource }}
           else
             terraform plan
@@ -57,9 +59,11 @@ jobs:
         if: ${{ github.event.inputs.action == 'apply' }}
         run: |
           if [[ "${{ github.event.inputs.target_resource }}" == dynamodb:* ]]; then
-            table_name=${{ github.event.inputs.target_resource#dynamodb: }}
+            # If the input starts with 'dynamodb:', treat it as a DynamoDB table
+            table_name="${{ github.event.inputs.target_resource#dynamodb: }}"
             terraform apply --target="aws_dynamodb_table.dynamodb_tables[\"$table_name\"]" -auto-approve
           elif [ "${{ github.event.inputs.target_resource }}" != "" ]; then
+            # For other AWS resources, use the regular target
             terraform apply --target=${{ github.event.inputs.target_resource }} -auto-approve
           else
             terraform apply -auto-approve
