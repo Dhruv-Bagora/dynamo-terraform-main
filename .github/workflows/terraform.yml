@@ -11,8 +11,8 @@ on:
         options:
           - plan
           - apply
-      target_table:
-        description: 'Table name to target (e.g., table1) - required for specific table creation'
+      target_resource:
+        description: 'Target resource (prefix DynamoDB tables with dynamodb:, e.g., dynamodb:table1 or aws_instance.my_instance for EC2)'
         required: false
         default: ''
 
@@ -29,7 +29,7 @@ jobs:
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: us-east-1  # You can hardcode the region or use a GitHub secret for flexibility
+          aws-region: us-west-1  
 
       - name: Set up Terraform
         uses: hashicorp/setup-terraform@v2
@@ -39,22 +39,28 @@ jobs:
       - name: Terraform Init
         run: terraform init
 
-      # Terraform Plan with exact format
+      # Determine the target format based on the resource type (DynamoDB table or other resources)
       - name: Terraform Plan
         if: ${{ github.event.inputs.action == 'plan' }}
         run: |
-          if [ "${{ github.event.inputs.target_table }}" != "" ]; then
-            terraform plan --target='aws_dynamodb_table.dynamodb_tables["${{ github.event.inputs.target_table }}"]'
+          if [[ "${{ github.event.inputs.target_resource }}" == dynamodb:* ]]; then
+            table_name=${{ github.event.inputs.target_resource#"dynamodb:" }}
+            terraform plan --target='aws_dynamodb_table.dynamodb_tables["'$table_name'"]'
+          elif [ "${{ github.event.inputs.target_resource }}" != "" ]; then
+            terraform plan --target=${{ github.event.inputs.target_resource }}
           else
             terraform plan
           fi
 
-      # Terraform Apply with exact format
+      # Terraform Apply with correct syntax for DynamoDB tables and other resources
       - name: Terraform Apply
         if: ${{ github.event.inputs.action == 'apply' }}
         run: |
-          if [ "${{ github.event.inputs.target_table }}" != "" ]; then
-            terraform apply --target='aws_dynamodb_table.dynamodb_tables["${{ github.event.inputs.target_table }}"]' -auto-approve
+          if [[ "${{ github.event.inputs.target_resource }}" == dynamodb:* ]]; then
+            table_name=${{ github.event.inputs.target_resource#"dynamodb:" }}
+            terraform apply --target='aws_dynamodb_table.dynamodb_tables["'$table_name'"]' -auto-approve
+          elif [ "${{ github.event.inputs.target_resource }}" != "" ]; then
+            terraform apply --target=${{ github.event.inputs.target_resource }} -auto-approve
           else
             terraform apply -auto-approve
           fi
