@@ -1,0 +1,60 @@
+name: Terraform Pipeline
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: 'Choose Terraform action to perform (plan, apply)'
+        required: true
+        default: 'plan'
+        type: choice
+        options:
+          - plan
+          - apply
+      target_table:
+        description: 'Table name to target (e.g., table1) - leave empty for all tables'
+        required: false
+        default: ''
+
+jobs:
+  terraform:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-west-1  # You can hardcode the region or use a GitHub secret for flexibility
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v2
+        with:
+          terraform_version: 1.0.0
+
+      - name: Terraform Init
+        run: terraform init
+
+      # Terraform Plan with target
+      - name: Terraform Plan
+        if: ${{ github.event.inputs.action == 'plan' }}
+        run: |
+          if [ "${{ github.event.inputs.target_table }}" != "" ]; then
+            terraform plan --target=aws_dynamodb_table.dynamodb_tables["${{ github.event.inputs.target_table }}"]
+          else
+            terraform plan
+          fi
+
+      # Terraform Apply with target
+      - name: Terraform Apply
+        if: ${{ github.event.inputs.action == 'apply' }}
+        run: |
+          if [ "${{ github.event.inputs.target_table }}" != "" ]; then
+            terraform apply --target=aws_dynamodb_table.dynamodb_tables["${{ github.event.inputs.target_table }}"] -auto-approve
+          else
+            terraform apply -auto-approve
+          fi
