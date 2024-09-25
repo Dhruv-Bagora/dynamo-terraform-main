@@ -46,24 +46,36 @@ jobs:
 
       - name: Terraform Init
         run: terraform init
-        
+      
       - name: Run Terraform Action (Plan or Apply)
         run: |
           action="${{ github.event.inputs.action }}"
           
           if [ "${{ github.event.inputs.resource_scope }}" == "all" ]; then
             echo "Running $action for all resources"
-            terraform $action -auto-approve
+            if [ "$action" == "apply" ]; then
+              terraform apply -auto-approve
+            else
+              terraform plan
+            fi
           elif [ "${{ github.event.inputs.resource_scope }}" == "custom" ] && [ "${{ github.event.inputs.target_resource }}" != "" ]; then
             IFS=',' read -r -a resources <<< "${{ github.event.inputs.target_resource }}"
             
             for resource in "${resources[@]}"; do
               if [[ "$resource" == *.* ]]; then
                 echo "Running $action for AWS resource: $resource"
-                terraform $action --target=$resource -auto-approve
+                if [ "$action" == "apply" ]; then
+                  terraform apply --target=$resource -auto-approve
+                else
+                  terraform plan --target=$resource
+                fi
               else
                 echo "Running $action for DynamoDB table: $resource"
-                terraform $action --target="aws_dynamodb_table.dynamodb_tables[\"$resource\"]" -auto-approve
+                if [ "$action" == "apply" ]; then
+                  terraform apply --target="aws_dynamodb_table.dynamodb_tables[\"$resource\"]" -auto-approve
+                else
+                  terraform plan --target="aws_dynamodb_table.dynamodb_tables[\"$resource\"]"
+                fi
               fi
             done
           else
