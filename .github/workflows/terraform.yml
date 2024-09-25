@@ -1,93 +1,124 @@
-name: Terraform Pipeline
+name: UAT/PROD/QA Terraform Deploy with Resource Targeting
 
 on:
-  workflow_dispatch:
-    inputs:
-      action:
-        description: 'Choose Terraform action to perform (plan, apply, destroy)'
-        required: true
-        default: 'plan'
-        type: choice
-        options:
-          - plan
-          - apply
-          - destroy
-      resource_scope:
-        description: 'Choose whether to run the action on all resources or custom resources'
-        required: true
-        default: 'all'
-        type: choice
-        options:
-          - all
-          - custom
-      target_resource:
-        description: 'Target Resource (comma-separated if multiple)'
-        required: false
-        default: ''
+    workflow_dispatch:
+        inputs:
+            action:
+                type: choice
+                description: Enter the action
+                required: true
+                options:
+                    - validate
+                    - plan
+                    - apply
+                    - destroy
+            environment:
+                type: choice
+                description: Select the environment
+                required: true
+                options:
+                    - prod
+                    - uat
+                    - qa
+                    - demo
+            resource_scope:
+                type: choice
+                description: Choose whether to run on all resources or custom resources'
+                required: true
+                options:
+                    - all
+                    - custom
+            target_resource:
+                type: string
+                description: Target Resource (comma-separated if multiple) - Required if custom resource scope is selected
+                required: false
+
+run-name: Terraform ${{ inputs.action }} in ${{ inputs.environment }} targeting ${{ inputs.resource_scope }} by @${{ github.actor }}
 
 jobs:
-  terraform:
-    runs-on: ubuntu-latest
+    deploy:
+        runs-on: ubuntu-latest
+        env:
+            AWS_REGION_BACKEND: "us-east-1"
+            AWS_REGION: "us-east-1"
+            action: ${{ github.event.inputs.action }}
+            environment: ${{ github.event.inputs.environment }}
+            resource_scope: ${{ github.event.inputs.resource_scope }}
+            target_resource: ${{ github.event.inputs.target_resource }}
 
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v3  # Latest stable version of checkout
-        
-      - name: Configure AWS Credentials
-        uses: aws-actions/configure-aws-credentials@v3  # Latest stable version of configure-aws-credentials
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: us-east-1 
+        steps:
+            - name: Checkout code
+              uses: actions/checkout@v3
 
-      - name: Set up Terraform
-        uses: hashicorp/setup-terraform@v3.1.1  # Latest stable version of setup-terraform
-        with:
-          terraform_version: 1.9.5
+            - name: Install AWS CLI v2
+              run: |
+                curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o /tmp/awscliv2.zip
+                unzip -q /tmp/awscliv2.zip -d /tmp
+                sudo /tmp/aws/install --update
 
-      - name: Terraform Init
-        run: |
-          terraform --version
-          terraform init
-      
-      - name: Run Terraform Action (Plan, Apply, or Destroy)
-        run: |
-          action="${{ github.event.inputs.action }}"
-          
-          if [ "${{ github.event.inputs.resource_scope }}" == "all" ]; then
-            echo "Running $action for all resources"
-            if [ "$action" == "apply" ]; then
-              terraform apply -auto-approve
-            elif [ "$action" == "destroy" ]; then
-              terraform destroy -auto-approve
-            else
-              terraform plan
-            fi
-          elif [ "${{ github.event.inputs.resource_scope }}" == "custom" ] && [ "${{ github.event.inputs.target_resource }}" != "" ]; then
-            IFS=',' read -r -a resources <<< "${{ github.event.inputs.target_resource }}"
-            
-            for resource in "${resources[@]}"; do
-              if [[ "$resource" == *.* ]]; then
-                echo "Running $action for AWS resource: $resource"
-                if [ "$action" == "apply" ]; then
-                  terraform apply --target=$resource -auto-approve
-                elif [ "$action" == "destroy" ]; then
-                  terraform destroy --target=$resource -auto-approve
-                else
-                  terraform plan --target=$resource
+            - name: Configure AWS backend
+              run: |
+                aws configure set aws_access_key_id $AWS_ACCESS_KEY_ID --profile $AWS_PROFILE && aws configure set aws_secret_access_key $AWS_SECRET_ACCESS_KEY --profile $AWS_PROFILE && aws configure set region $AWS_REGION --profile $AWS_PROFILE
+              env:
+                AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_CI }}
+                AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_KEY_CI }}
+                AWS_PROFILE: "backend"
+
+            - name: Setup environment for QA/UAT/PROD/DEMO
+              run: |
+                if [ "${{ github.event.inputs.environment }}" == "qa" ]; then
+                  export AWS_ACCESS_KEY_ID=${{ secrets.AWS_ACCESS_KEY_QA }}
+                  export AWS_SECRET_ACCESS_KEY=${{ secrets.AWS_SECRET_KEY_QA }}
+                  export AWS_PROFILE="qa"
+                elif [ "${{ github.event.inputs.environment }}" == "uat" ]; then
+                  export AWS_ACCESS_KEY_ID=${{ secrets.AWS_ACCESS_KEY_UAT }}
+                  export AWS_SECRET_ACCESS_KEY=${{ secrets.AWS_SECRET_KEY_UAT }}
+                  export AWS_PROFILE="uat"
+                elif [ "${{ github.event.inputs.environment }}" == "prod" ]; then
+                  export AWS_ACCESS_KEY_ID=${{ secrets.AWS_ACCESS_KEY_PROD }}
+                  export AWS_SECRET_ACCESS_KEY=${{ secrets.AWS_SECRET_KEY_PROD }}
+                  export AWS_PROFILE="prod"
+                elif [ "${{ github.event.inputs.environment }}" == "demo" ]; then
+                  export AWS_ACCESS_KEY_ID=${{ secrets.AWS_ACCESS_KEY_UAT }}
+                  export AWS_SECRET_ACCESS_KEY=${{ secrets.AWS_SECRET_KEY_UAT }}
+                  export AWS_PROFILE="demo"
                 fi
-              else
-                echo "Running $action for DynamoDB table: $resource"
-                if [ "$action" == "apply" ]; then
-                  terraform apply --target="aws_dynamodb_table.dynamodb_tables[\"$resource\"]" -auto-approve
-                elif [ "$action" == "destroy" ]; then
-                  terraform destroy --target="aws_dynamodb_table.dynamodb_tables[\"$resource\"]" -auto-approve
+
+            - name: Install Terraform
+              run: |
+                aws s3 cp s3://scramble-awsdev1-tfstate/terraform ./terraform
+                sudo chmod +x terraform
+                sudo mv terraform /usr/local/bin/
+                terraform --version
+
+            - name: Initialize Terraform Backend
+              run: |
+                aws configure list-profiles
+                cd terraform
+                terraform init
+                terraform workspace select ${{ github.event.inputs.environment }}
+
+            - name: Run Terraform Action (Plan, Apply, or Destroy)
+              run: |
+                cd terraform
+                if [ "${{ github.event.inputs.resource_scope }}" == "custom" ] && [ "${{ github.event.inputs.target_resource }}" != "" ]; then
+                  IFS=',' read -r -a resources <<< "${{ github.event.inputs.target_resource }}"
+                  for resource in "${resources[@]}"; do
+                    if [ "${{ github.event.inputs.action }}" == "apply" ]; then
+                      terraform apply --target=$resource -auto-approve
+                    elif [ "${{ github.event.inputs.action }}" == "destroy" ]; then
+                      terraform destroy --target=$resource -auto-approve
+                    else
+                      terraform plan --target=$resource
+                    fi
+                  done
                 else
-                  terraform plan --target="aws_dynamodb_table.dynamodb_tables[\"$resource\"]"
+                  echo "Running ${{ github.event.inputs.action }} for all resources"
+                  if [ "${{ github.event.inputs.action }}" == "apply" ]; then
+                    terraform apply -auto-approve
+                  elif [ "${{ github.event.inputs.action }}" == "destroy" ]; then
+                    terraform destroy -auto-approve
+                  else
+                    terraform plan
+                  fi
                 fi
-              fi
-            done
-          else
-            echo "No valid target resource provided."
-            exit 1
-          fi
