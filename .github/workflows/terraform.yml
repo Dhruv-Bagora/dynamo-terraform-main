@@ -20,7 +20,7 @@ on:
           - all
           - custom
       target_resource:
-        description: 'Comma-separated list of target resources (e.g., table1,aws_instance.my_instance)'
+        description: 'Target Resource'
         required: false
         default: ''
 
@@ -42,7 +42,7 @@ jobs:
       - name: Set up Terraform
         uses: hashicorp/setup-terraform@v2
         with:
-          terraform_version: 1.0.0
+          terraform_version: 5.0.0
 
       - name: Terraform Init
         run: terraform init
