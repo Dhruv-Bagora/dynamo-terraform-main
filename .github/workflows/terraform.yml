@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       action:
-        description: 'Choose Terraform action to perform (plan, apply)'
+        description: 'Choose Terraform action to perform'
         required: true
         default: 'plan'
         type: choice
@@ -20,7 +20,7 @@ on:
           - all
           - custom
       target_resource:
-        description: 'Comma-separated DynamoDB table names (e.g., table1,table2) or AWS resources (e.g., aws_instance.my_instance,aws_s3_bucket.my_bucket). Only applicable if custom is selected.'
+        description: 'Target Resource'
         required: false
         default: ''
 
@@ -46,8 +46,7 @@ jobs:
 
       - name: Terraform Init
         run: terraform init
-
-      # Plan Step: Conditional logic based on resource scope (all or custom)
+        
       - name: Terraform Plan
         if: ${{ github.event.inputs.action == 'plan' }}
         run: |
@@ -55,10 +54,8 @@ jobs:
             echo "Running plan for all resources"
             terraform plan
           elif [ "${{ github.event.inputs.resource_scope }}" == "custom" ] && [ "${{ github.event.inputs.target_resource }}" != "" ]; then
-            # Split the target_resource string into an array by commas
             IFS=',' read -r -a resources <<< "${{ github.event.inputs.target_resource }}"
             
-            # Loop over each resource and run the appropriate command
             for resource in "${resources[@]}"; do
               if [[ "$resource" == *.* ]]; then
                 echo "Running plan for AWS resource: $resource"
@@ -73,7 +70,7 @@ jobs:
             exit 1
           fi
 
-      # Apply Step: Conditional logic based on resource scope (all or custom)
+      
       - name: Terraform Apply
         if: ${{ github.event.inputs.action == 'apply' }}
         run: |
@@ -81,10 +78,7 @@ jobs:
             echo "Running apply for all resources"
             terraform apply -auto-approve
           elif [ "${{ github.event.inputs.resource_scope }}" == "custom" ] && [ "${{ github.event.inputs.target_resource }}" != "" ]; then
-            # Split the target_resource string into an array by commas
             IFS=',' read -r -a resources <<< "${{ github.event.inputs.target_resource }}"
-            
-            # Loop over each resource and run the appropriate command
             for resource in "${resources[@]}"; do
               if [[ "$resource" == *.* ]]; then
                 echo "Running apply for AWS resource: $resource"
