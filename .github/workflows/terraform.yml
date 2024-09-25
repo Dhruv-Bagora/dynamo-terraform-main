@@ -86,7 +86,7 @@ jobs:
 
             - name: Install Terraform
               run: |
-                aws s3 cp s3://scramble-awsdev1-tfstate/terraform ./terraform
+                aws --profile backend s3 cp s3://scramble-awsdev1-tfstate/terraform ./terraform
                 sudo chmod +x terraform
                 sudo mv terraform /usr/local/bin/
                 terraform --version
