@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       action:
-        description: 'Choose Terraform action to perform'
+        description: 'Choose Terraform action to perform (plan, apply)'
         required: true
         default: 'plan'
         type: choice
@@ -20,7 +20,7 @@ on:
           - all
           - custom
       target_resource:
-        description: 'Target Resource'
+        description: 'Comma-separated list of target resources (e.g., table1,aws_instance.my_instance)'
         required: false
         default: ''
 
@@ -47,45 +47,23 @@ jobs:
       - name: Terraform Init
         run: terraform init
         
-      - name: Terraform Plan
-        if: ${{ github.event.inputs.action == 'plan' }}
+      - name: Run Terraform Action (Plan or Apply)
         run: |
+          action="${{ github.event.inputs.action }}"
+          
           if [ "${{ github.event.inputs.resource_scope }}" == "all" ]; then
-            echo "Running plan for all resources"
-            terraform plan
+            echo "Running $action for all resources"
+            terraform $action -auto-approve
           elif [ "${{ github.event.inputs.resource_scope }}" == "custom" ] && [ "${{ github.event.inputs.target_resource }}" != "" ]; then
             IFS=',' read -r -a resources <<< "${{ github.event.inputs.target_resource }}"
             
             for resource in "${resources[@]}"; do
               if [[ "$resource" == *.* ]]; then
-                echo "Running plan for AWS resource: $resource"
-                terraform plan --target=$resource
+                echo "Running $action for AWS resource: $resource"
+                terraform $action --target=$resource -auto-approve
               else
-                echo "Running plan for DynamoDB table: $resource"
-                terraform plan --target="aws_dynamodb_table.dynamodb_tables[\"$resource\"]"
-              fi
-            done
-          else
-            echo "No valid target resource provided."
-            exit 1
-          fi
-
-      
-      - name: Terraform Apply
-        if: ${{ github.event.inputs.action == 'apply' }}
-        run: |
-          if [ "${{ github.event.inputs.resource_scope }}" == "all" ]; then
-            echo "Running apply for all resources"
-            terraform apply -auto-approve
-          elif [ "${{ github.event.inputs.resource_scope }}" == "custom" ] && [ "${{ github.event.inputs.target_resource }}" != "" ]; then
-            IFS=',' read -r -a resources <<< "${{ github.event.inputs.target_resource }}"
-            for resource in "${resources[@]}"; do
-              if [[ "$resource" == *.* ]]; then
-                echo "Running apply for AWS resource: $resource"
-                terraform apply --target=$resource -auto-approve
-              else
-                echo "Running apply for DynamoDB table: $resource"
-                terraform apply --target="aws_dynamodb_table.dynamodb_tables[\"$resource\"]" -auto-approve
+                echo "Running $action for DynamoDB table: $resource"
+                terraform $action --target="aws_dynamodb_table.dynamodb_tables[\"$resource\"]" -auto-approve
               fi
             done
           else
