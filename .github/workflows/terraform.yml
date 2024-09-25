@@ -46,7 +46,9 @@ jobs:
           terraform_version: 1.9.3 
 
       - name: Terraform Init
-        run: terraform init && echo "terraform --version"
+        run: |
+          terraform --version
+          terraform init
       
       - name: Run Terraform Action (Plan, Apply, or Destroy)
         run: |
